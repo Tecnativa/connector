@@ -255,8 +255,22 @@ class OpenERPJobStorage(JobStorage):
             vals['func'] = dumps((job_.func_name,
                                   job_.args,
                                   job_.kwargs))
+            if not self.search_jobs_enqueued(job_):
+                self.job_model.sudo().create(vals)
 
-            self.job_model.sudo().create(vals)
+    def search_jobs_enqueued(self, job):
+        if not job.model_name:
+            return False
+        res_id = job.args[1]
+        func_search = "%s('%s', %s," % (
+            job.func_name, job.model_name, res_id)
+        enqueued_jobs = self.session.env['queue.job'].sudo().search([
+            ('func_name', '=', job.func_name),
+            ('model_name', '=', job.model_name),
+            ('func_string', 'like', '%s%%' % func_search),
+            ('state', '=', 'pending')
+        ], limit=1)
+        return bool(enqueued_jobs)
 
     def load(self, job_uuid):
         """ Read a job from the Database"""
